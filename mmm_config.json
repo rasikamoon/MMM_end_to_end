@@ -1,0 +1,192 @@
+{
+  "model_settings": {
+    "description": "Bayesian MMM model configuration",
+    "mcmc_sampling": {
+      "draws": 50,
+      "tune": 50,
+      "chains": 2,
+      "target_accept": 0.95,
+      "random_seed": 42
+    }
+  },
+  
+  "adstock_parameters": {
+    "description": "Adstock decay rates for each channel (0-1). Higher = longer carryover effect",
+    "default_decay": 0.5,
+    "channel_specific": {
+      "CDC+TV": 0.7,
+      "CDC+DIGITAL": 0.3,
+      "EQUITY+TV": 0.7,
+      "EQUITY+DIGITAL": 0.3,
+      "EQUITY+OOH": 0.6,
+      "EQUITY+IN STORE": 0.2,
+      "EQUITY+OTHERADVERTISING_NEWSPAPER_RADIO": 0.5,
+      "PANJAVED+TV": 0.7,
+      "PANJAVED+DIGITAL": 0.3,
+      "PANJAVED+OOH": 0.6,
+      "PANJAVED+IN STORE": 0.2,
+      "SALT+TV": 0.7,
+      "SALT+DIGITAL": 0.3,
+      "SALT+OOH": 0.6,
+      "SALT+IN STORE": 0.2,
+      "SALT+OTHERADVERTISING_NEWSPAPER_RADIO": 0.5,
+      "TOTAL+TV": 0.7,
+      "TOTAL+DIGITAL": 0.3,
+      "TOTAL+IN STORE": 0.2,
+      "TOTAL+OTHERADVERTISING_NEWSPAPER_RADIO": 0.5
+    }
+  },
+  
+  "saturation_parameters": {
+    "description": "Hill saturation parameters. Alpha = half-saturation point, Gamma = curve shape",
+    "default": {
+      "alpha": 100,
+      "gamma": 2
+    },
+    "channel_specific": {
+      "CDC+TV": {
+        "alpha": 200000,
+        "gamma": 0.5,
+        "comment": "TV typically has higher saturation point"
+      },
+      "CDC+DIGITAL": {
+        "alpha": 50000,
+        "gamma": 1.5,
+        "comment": "Digital saturates faster"
+      },
+      "EQUITY+TV": {
+        "alpha": 200000,
+        "gamma": 0.5
+      },
+      "EQUITY+DIGITAL": {
+        "alpha": 50000,
+        "gamma": 1.5
+      },
+      "EQUITY+OOH": {
+        "alpha": 100000,
+        "gamma": 1.0
+      },
+      "EQUITY+IN STORE": {
+        "alpha": 30000,
+        "gamma": 2.0
+      },
+      "EQUITY+OTHERADVERTISING_NEWSPAPER_RADIO": {
+        "alpha": 80000,
+        "gamma": 1.2
+      },
+      "PANJAVED+TV": {
+        "alpha": 200000,
+        "gamma": 0.5
+      },
+      "PANJAVED+DIGITAL": {
+        "alpha": 50000,
+        "gamma": 1.5
+      },
+      "PANJAVED+OOH": {
+        "alpha": 100000,
+        "gamma": 1.0
+      },
+      "PANJAVED+IN STORE": {
+        "alpha": 30000,
+        "gamma": 2.0
+      },
+      "SALT+TV": {
+        "alpha": 200000,
+        "gamma": 0.5
+      },
+      "SALT+DIGITAL": {
+        "alpha": 50000,
+        "gamma": 1.5
+      },
+      "SALT+IN STORE": {
+        "alpha": 30000,
+        "gamma": 2.0
+      },
+      "SALT+OTHERADVERTISING_NEWSPAPER_RADIO": {
+        "alpha": 80000,
+        "gamma": 1.2
+      },
+      "TOTAL+TV": {
+        "alpha": 200000,
+        "gamma": 0.5
+      },
+      "TOTAL+DIGITAL": {
+        "alpha": 50000,
+        "gamma": 1.5
+      },
+      "TOTAL+IN STORE": {
+        "alpha": 30000,
+        "gamma": 2.0
+      },
+      "TOTAL+OTHERADVERTISING_NEWSPAPER_RADIO": {
+        "alpha": 80000,
+        "gamma": 1.2
+      }
+    }
+  },
+  
+  "roi_analysis": {
+    "description": "ROAS calculation settings for specified time period",
+    "analysis_period": {
+      "start_date": "2019-07-01",
+      "end_date": "2019-09-30",
+      "period_name": "Q2 2019"
+    },
+    "target_channels": "all",
+    "breakeven_threshold": 1.0
+  },
+  
+  "data_settings": {
+    "input_file": "input_data1.xlsx",
+    "date_column": "week_date",
+    "revenue_column": "weekly_revenue"
+  },
+  
+  "output_settings": {
+    "save_plots": true,
+    "plot_dpi": 300,
+    "save_csv": true,
+    "output_files": {
+      "model_summary": "mmm_summary.csv",
+      "media_contributions": "media_contributions.csv",
+      "roi_analysis": "roas_analysis.csv",
+      "contribution_distribution": "revenue_contribution_distribution.csv",
+      "scatter_plot": "actual_vs_predicted_scatter.png",
+      "trendline_plot": "actual_vs_predicted_trendline.png",
+      "roi_plot": "roas_visualization.png",
+      "decomp_media_vs_nonmedia": "revenue_decomp_media_vs_nonmedia.png",
+      "decomp_full": "revenue_decomp_full.png",
+      "contribution_pie": "revenue_contribution_pie.png",
+      "contribution_bar": "revenue_contribution_bar.png",
+      "trace_base": "trace_plots_base.png",
+      "trace_media": "trace_plots_media.png"
+    }
+  },
+  
+  "channel_groups": {
+    "description": "Channel groupings for analysis",
+    "by_brand": {
+      "CDC": ["CDC+TV", "CDC+DIGITAL"],
+      "EQUITY": ["EQUITY+TV", "EQUITY+DIGITAL", "EQUITY+OOH", "EQUITY+IN STORE", "EQUITY+OTHERADVERTISING_NEWSPAPER_RADIO"],
+      "PANJAVED": ["PANJAVED+TV", "PANJAVED+DIGITAL", "PANJAVED+OOH", "PANJAVED+IN STORE"],
+      "SALT": ["SALT+TV", "SALT+DIGITAL", "SALT+IN STORE", "SALT+OTHERADVERTISING_NEWSPAPER_RADIO"],
+      "TOTAL": ["TOTAL+TV", "TOTAL+DIGITAL", "TOTAL+IN STORE", "TOTAL+OTHERADVERTISING_NEWSPAPER_RADIO"]
+    },
+    "by_media_type": {
+      "TV": ["CDC+TV", "EQUITY+TV", "PANJAVED+TV", "SALT+TV", "TOTAL+TV"],
+      "DIGITAL": ["CDC+DIGITAL", "EQUITY+DIGITAL", "PANJAVED+DIGITAL", "SALT+DIGITAL", "TOTAL+DIGITAL"],
+      "OOH": ["EQUITY+OOH", "PANJAVED+OOH"],
+      "IN_STORE": ["EQUITY+IN STORE", "PANJAVED+IN STORE", "SALT+IN STORE", "TOTAL+IN STORE"],
+      "OTHER": ["EQUITY+OTHERADVERTISING_NEWSPAPER_RADIO", "SALT+OTHERADVERTISING_NEWSPAPER_RADIO", "TOTAL+OTHERADVERTISING_NEWSPAPER_RADIO"]
+    }
+  },
+  
+  "notes": {
+    "adstock_guidelines": "TV: 0.6-0.8, Digital: 0.2-0.4, OOH: 0.5-0.7, In-Store: 0.1-0.3",
+    "saturation_guidelines": "Higher alpha = higher saturation point, Higher gamma = steeper curve",
+    "typical_ranges": {
+      "alpha": "10000-500000 depending on spend levels",
+      "gamma": "0.3-3.0, typically 0.5-2.0"
+    }
+  }
+}
