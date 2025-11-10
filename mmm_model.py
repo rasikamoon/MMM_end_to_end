@@ -148,13 +148,13 @@ if __name__ == '__main__':
      'week13_si', 'week5_si', 'welfare', 'welfare_additional_boost']
     
     # Data columns
-    data_cols = ['week_date']
+    date_cols = ['week_date']
     
     # Revenue column
     rev_cols = [data_config['revenue_column']]
     
     # All required columns
-    req_cols = data_cols + media_vars + control_vars + rev_cols
+    req_cols = date_cols + media_vars + control_vars + rev_cols
     
     # Keep only required columns
     input_df = input_df[req_cols]
@@ -484,7 +484,8 @@ if __name__ == '__main__':
         print(f"✅ ROAS visualization saved to: {output_config['output_files']['roi_plot']}")
     
     # ============================================================================
-    # 11B. REVENUE DECOMPOSITION ANALYSIS
+    # 11B. REVENUE
+    
     # ============================================================================
     
     print("\n" + "="*80)
