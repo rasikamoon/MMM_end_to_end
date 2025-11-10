@@ -106,7 +106,8 @@ if __name__ == '__main__':
     config = load_config('mmm_config.json')
     
     # Extract config sections
-    model_config = config['model_settings']['mcmc_sampling']
+    model_config = config['model_settings']  # Load full model_settings (includes priors and mcmc_sampling)
+    mcmc_config = model_config['mcmc_sampling']  # Extract MCMC settings separately
     adstock_config = config['adstock_parameters']
     saturation_config = config['saturation_parameters']
     roi_config = config['roi_analysis']
@@ -197,9 +198,10 @@ if __name__ == '__main__':
     # Create copy for scaling
     final_df = hill_df.copy()
     
-    # IMPORTANT: Save unscaled media data for ROAS calculation
+    # IMPORTANT: Save unscaled data for revenue contribution calculation
     # Z-scaled values can be negative, which would give wrong revenue attribution
     X_media_unscaled = hill_df[media_vars].values
+    X_control_unscaled = hill_df[control_vars].values
     
     # Scale features
     scaled_features = feature_scaler.fit_transform(final_df[all_features])
@@ -233,22 +235,82 @@ if __name__ == '__main__':
     
     print("\nBuilding Bayesian MMM model...")
     
+    # ============================================================================
+    # 6B. LOAD PRIORS FROM CONFIG
+    # ============================================================================
+    
+    print("\nLoading priors from config...")
+    prior_config = model_config.get('priors', {})
+    
+    # Intercept prior
+    intercept_config = prior_config.get('intercept', {})
+    intercept_mu = y.mean()
+    intercept_sigma = y.std() * intercept_config.get('sigma_multiplier', 0.5)
+    
+    # Observation noise prior
+    noise_config = prior_config.get('observation_noise', {})
+    noise_sigma = y.std() * noise_config.get('sigma_multiplier', 0.5)
+    
+    # Control variables prior
+    control_config = prior_config.get('control_variables', {})
+    control_mu = control_config.get('default_mu', 0)
+    control_sigma = control_config.get('default_sigma', 0.1)
+    
+    # Media channels prior - hierarchical by media type with channel-specific priors
+    media_config = prior_config.get('media_channels', {})
+    default_media_sigma = media_config.get('default_sigma', 0.5)
+    by_media_type = media_config.get('by_media_type', {})
+    channel_specific = media_config.get('channel_specific', {})
+    
+    # Build sigma array for each media channel
+    media_sigmas = []
+    channels_with_specific_priors = 0
+    channels_with_type_priors = 0
+    channels_with_default = 0
+    
+    for channel in media_vars:
+        # Check for channel-specific prior first
+        if channel in channel_specific:
+            sigma = channel_specific[channel]['sigma']
+            channels_with_specific_priors += 1
+        else:
+            # Extract media type from channel name (e.g., "CDC+TV" -> "TV")
+            media_type = channel.split('+')[-1]
+            # Use media type sigma, or default if not found
+            if media_type in by_media_type:
+                sigma = by_media_type[media_type]
+                channels_with_type_priors += 1
+            else:
+                sigma = default_media_sigma
+                channels_with_default += 1
+        media_sigmas.append(sigma)
+    
+    # DEBUG: Show breakdown
+    print(f"\nPrior Assignment Breakdown:")
+    print(f"  Channels with specific priors: {channels_with_specific_priors}")
+    print(f"  Channels using media type priors: {channels_with_type_priors}")
+    print(f"  Channels using default: {channels_with_default}")
+    
+    print(f"  Intercept: Normal(mu={intercept_mu:.2f}, sigma={intercept_sigma:.2f})")
+    print(f"  Media channels: HalfNormal with channel-specific sigmas")
+    print(f"    - {len(channel_specific)} channels with specific priors")
+    print(f"    - Remaining use media type defaults (TV={by_media_type.get('TV', default_media_sigma)}, DIGITAL={by_media_type.get('DIGITAL', default_media_sigma)}, etc.)")
+    print(f"  Control variables: Normal(mu={control_mu}, sigma={control_sigma})")
+    print(f"  Observation noise: HalfNormal(sigma={noise_sigma:.2f})")
+    
     with pm.Model() as mmm_model:
         
-        # Priors - Improved for better convergence and domain constraints
-        # Intercept: centered at mean revenue with reasonable variance
-        intercept = pm.Normal('intercept', mu=y.mean(), sigma=y.std() * 0.5)
+        # Priors from config
+        intercept = pm.Normal('intercept', mu=intercept_mu, sigma=intercept_sigma)
         
-        # Media coefficients: MUST be positive (media spend increases revenue)
-        # Using HalfNormal with smaller sigma for regularization
-        beta_media = pm.HalfNormal('beta_media', sigma=2, shape=n_media)
+        # Media coefficients: hierarchical priors by media type
+        beta_media = pm.HalfNormal('beta_media', sigma=np.array(media_sigmas), shape=n_media)
         
-        # Control variables: can be positive or negative
-        # Using tighter prior for regularization
-        beta_control = pm.Normal('beta_control', mu=0, sigma=0.5, shape=n_control)
+        # Control variables: tight regularization
+        beta_control = pm.Normal('beta_control', mu=control_mu, sigma=control_sigma, shape=n_control)
         
-        # Observation noise: positive only
-        sigma = pm.HalfNormal('sigma', sigma=y.std() * 0.5)
+        # Observation noise
+        sigma = pm.HalfNormal('sigma', sigma=noise_sigma)
         
         # Likelihood
         mu = (intercept + 
@@ -259,14 +321,14 @@ if __name__ == '__main__':
         
         # Sampling
         print("Sampling from posterior (this may take a few minutes)...")
-        print(f"  Draws: {model_config['draws']}, Tune: {model_config['tune']}, Chains: {model_config['chains']}")
+        print(f"  Draws: {mcmc_config['draws']}, Tune: {mcmc_config['tune']}, Chains: {mcmc_config['chains']}")
         trace = pm.sample(
-            draws=model_config['draws'],
-            tune=model_config['tune'],
-            chains=model_config['chains'],
-            target_accept=model_config['target_accept'],
+            draws=mcmc_config['draws'],
+            tune=mcmc_config['tune'],
+            chains=mcmc_config['chains'],
+            target_accept=mcmc_config['target_accept'],
             return_inferencedata=True,
-            random_seed=model_config['random_seed']
+            random_seed=mcmc_config['random_seed']
         )
         
         # Posterior predictive
@@ -506,9 +568,29 @@ if __name__ == '__main__':
         total_media_contribution = roas_df['Revenue_Generated'].sum()
         
         # 3. Control variables contribution
-        # Need to get unscaled control data for period
-        X_control_period = X_control[period_indices, :]
-        control_contribution = (beta_control_mean * X_control_period).sum()
+        # IMPORTANT: Use UNSCALED control data for accurate contribution calculation
+        X_control_period_unscaled = X_control_unscaled[period_indices, :]
+        
+        # Get scaling parameters
+        control_means = feature_scaler.mean_[n_media:]
+        control_stds = feature_scaler.scale_[n_media:]
+        
+        # Calculate control contribution using unscaled data
+        # Need to account for z-scaling: contribution = beta * (X_unscaled - mean) / std
+        control_contribution = 0
+        positive_control_contrib = 0
+        negative_control_contrib = 0
+        
+        for i in range(n_control):
+            # Transform: scaled_value = (unscaled - mean) / std
+            # So: contribution = beta * scaled_value = beta * (unscaled - mean) / std
+            scaled_values = (X_control_period_unscaled[:, i] - control_means[i]) / control_stds[i]
+            contrib = (beta_control_mean[i] * scaled_values).sum()
+            control_contribution += contrib
+            if contrib > 0:
+                positive_control_contrib += contrib
+            else:
+                negative_control_contrib += contrib
         
         # Total predicted revenue for period
         total_predicted_revenue = base_contribution + total_media_contribution + control_contribution
@@ -524,9 +606,19 @@ if __name__ == '__main__':
         print("-"*80)
         print(f"Total Predicted Revenue:     ${total_predicted_revenue:,.2f}")
         print(f"")
-        print(f"Base (Intercept):            ${base_contribution:,.2f} ({base_pct:.1f}%)")
-        print(f"Media Contribution:          ${total_media_contribution:,.2f} ({media_pct:.1f}%)")
-        print(f"Control Variables:           ${control_contribution:,.2f} ({control_pct:.1f}%)")
+        print(f"POSITIVE DRIVERS:")
+        print(f"  Base (Intercept):          ${base_contribution:,.2f} ({base_pct:.1f}%)")
+        print(f"  Media Total:               ${total_media_contribution:,.2f} ({media_pct:.1f}%)")
+        if positive_control_contrib > 0:
+            pos_ctrl_pct = (positive_control_contrib / total_predicted_revenue * 100) if total_predicted_revenue != 0 else 0
+            print(f"  Positive Controls:         ${positive_control_contrib:,.2f} ({pos_ctrl_pct:.1f}%)")
+        print(f"")
+        if negative_control_contrib < 0:
+            neg_ctrl_pct = (negative_control_contrib / total_predicted_revenue * 100) if total_predicted_revenue != 0 else 0
+            print(f"NEGATIVE DRIVERS:")
+            print(f"  Negative Controls:         ${negative_control_contrib:,.2f} ({neg_ctrl_pct:.1f}%)")
+            print(f"")
+        print(f"NET CONTROL CONTRIBUTION:    ${control_contribution:,.2f} ({control_pct:.1f}%)")
         
         # ========================================================================
         # PIE CHART 1: Media vs Non-Media
@@ -571,56 +663,80 @@ if __name__ == '__main__':
         ax.legend(legend_labels, loc='upper left', bbox_to_anchor=(1, 1))
         
         plt.tight_layout()
-        plt.savefig('revenue_decomp_media_vs_nonmedia.png', dpi=output_config['plot_dpi'], bbox_inches='tight')
+        plt.savefig(output_config['output_files']['decomp_media_vs_nonmedia'], dpi=output_config['plot_dpi'], bbox_inches='tight')
         plt.close()
         
         print(f"✅ Media vs Non-Media pie chart saved")
         
         # ========================================================================
-        # PIE CHART 2: Full Decomposition (Base + Media + Controls)
+        # WATERFALL CHART: Revenue Build-Up
         # ========================================================================
         print("\n" + "-"*80)
-        print("Creating Pie Chart 2: Full Decomposition")
+        print("Creating Waterfall Chart: Revenue Build-Up")
         print("-"*80)
         
-        fig, ax = plt.subplots(figsize=(10, 8))
+        fig, ax = plt.subplots(figsize=(14, 8))
         
-        labels = ['Base\n(Intercept)', 'Media', 'Control\nVariables']
-        sizes = [base_pct, media_pct, control_pct]
-        colors = ['#99ff99', '#ff9999', '#ffcc99']
-        explode = (0, 0.1, 0)  # Explode media slice
-        
-        wedges, texts, autotexts = ax.pie(
-            sizes,
-            labels=labels,
-            autopct='%1.1f%%',
-            startangle=90,
-            colors=colors,
-            explode=explode,
-            textprops={'fontsize': 11, 'weight': 'bold'}
-        )
-        
-        for autotext in autotexts:
-            autotext.set_color('white')
-            autotext.set_fontsize(13)
-            autotext.set_weight('bold')
-        
-        ax.set_title(f'Revenue Decomposition: Base + Media + Controls ({period_name})', 
-                    fontsize=14, fontweight='bold', pad=20)
-        
-        # Add legend with values
-        legend_labels = [
-            f'Base: ${base_contribution:,.0f}',
-            f'Media: ${total_media_contribution:,.0f}',
-            f'Controls: ${control_contribution:,.0f}'
+        # Prepare waterfall data
+        categories = ['Base', 'Media', 'Positive\nControls', 'Negative\nControls', 'Total']
+        values = [
+            base_contribution,
+            total_media_contribution,
+            positive_control_contrib if positive_control_contrib > 0 else 0,
+            negative_control_contrib if negative_control_contrib < 0 else 0,
+            total_predicted_revenue
         ]
-        ax.legend(legend_labels, loc='upper left', bbox_to_anchor=(1, 1))
+        
+        # Calculate cumulative values for waterfall
+        cumulative = [0]
+        for i, val in enumerate(values[:-1]):
+            cumulative.append(cumulative[-1] + val)
+        
+        # Colors: green for positive, red for negative, blue for total
+        colors = ['#2ecc71', '#3498db', '#f39c12', '#e74c3c', '#34495e']
+        
+        # Plot bars
+        for i in range(len(categories)):
+            if i == len(categories) - 1:  # Total bar
+                ax.bar(i, values[i], color=colors[i], alpha=0.8, edgecolor='black', linewidth=1.5)
+            else:
+                if values[i] >= 0:
+                    ax.bar(i, values[i], bottom=cumulative[i], color=colors[i], alpha=0.8, edgecolor='black', linewidth=1)
+                else:
+                    ax.bar(i, -values[i], bottom=cumulative[i] + values[i], color=colors[i], alpha=0.8, edgecolor='black', linewidth=1)
+        
+        # Add connecting lines
+        for i in range(len(categories) - 1):
+            ax.plot([i + 0.4, i + 0.6], [cumulative[i+1], cumulative[i+1]], 'k--', linewidth=1, alpha=0.5)
+        
+        # Add value labels
+        for i, (cat, val) in enumerate(zip(categories, values)):
+            if i == len(categories) - 1:  # Total
+                label_y = val / 2
+            else:
+                if val >= 0:
+                    label_y = cumulative[i] + val / 2
+                else:
+                    label_y = cumulative[i] + val / 2
+            
+            ax.text(i, label_y, f'${val:,.0f}', ha='center', va='center', 
+                   fontweight='bold', fontsize=10, color='white' if abs(val) > total_predicted_revenue * 0.1 else 'black')
+        
+        ax.set_xticks(range(len(categories)))
+        ax.set_xticklabels(categories, fontsize=11)
+        ax.set_ylabel('Revenue ($)', fontsize=12)
+        ax.set_title(f'Revenue Waterfall: Build-Up Analysis ({period_name})', fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3, axis='y')
+        ax.axhline(y=0, color='black', linewidth=0.8)
+        
+        # Format y-axis
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x/1e6:.1f}M' if abs(x) >= 1e6 else f'${x/1e3:.0f}K'))
         
         plt.tight_layout()
-        plt.savefig('revenue_decomp_full.png', dpi=output_config['plot_dpi'], bbox_inches='tight')
+        plt.savefig(output_config['output_files']['decomp_waterfall'], dpi=output_config['plot_dpi'], bbox_inches='tight')
         plt.close()
         
-        print(f"✅ Full decomposition pie chart saved")
+        print(f"✅ Waterfall chart saved to: {output_config['output_files']['decomp_waterfall']}")
     
     # ============================================================================
     # 11C. MEDIA CHANNEL CONTRIBUTION DISTRIBUTION
@@ -813,10 +929,10 @@ if __name__ == '__main__':
     print(f"   - {output_config['output_files']['roi_analysis']}")
     print(f"   - {output_config['output_files']['roi_plot']}")
     print(f"\n  Revenue Decomposition:")
-    print(f"   - {output_config['output_files']['decomp_media_vs_nonmedia']} (Pie Chart 1: Media vs Non-Media)")
-    print(f"   - {output_config['output_files']['decomp_full']} (Pie Chart 2: Full Decomposition)")
-    print(f"   - {output_config['output_files']['contribution_pie']} (Pie Chart 3: Media Channels)")
-    print(f"   - {output_config['output_files']['contribution_bar']} (Bar Chart: Media Channels)")
+    print(f"   - {output_config['output_files']['decomp_waterfall']} ⭐ (Waterfall: Full Revenue Build-Up)")
+    print(f"   - {output_config['output_files']['decomp_media_vs_nonmedia']} (Pie: Media vs Non-Media)")
+    print(f"   - {output_config['output_files']['contribution_pie']} (Pie: Media Channel Breakdown)")
+    print(f"   - {output_config['output_files']['contribution_bar']} (Bar: Media Channel Breakdown)")
     print(f"   - {output_config['output_files']['contribution_distribution']}")
     print(f"\n  Media Contributions:")
     print(f"   - {output_config['output_files']['media_contributions']}")

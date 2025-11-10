@@ -7,6 +7,123 @@
       "chains": 2,
       "target_accept": 0.95,
       "random_seed": 42
+    },
+    
+    "priors": {
+      "description": "Prior distributions for model parameters",
+      
+      "intercept": {
+        "distribution": "normal",
+        "mu": "auto",
+        "sigma_multiplier": 0.5,
+        "description": "Baseline revenue. Auto uses y.mean() and y.std() * multiplier"
+      },
+      
+      "observation_noise": {
+        "distribution": "halfnormal",
+        "sigma_multiplier": 0.5,
+        "description": "Model uncertainty. Auto uses y.std() * multiplier"
+      },
+      
+      "control_variables": {
+        "distribution": "normal",
+        "default_mu": 0,
+        "default_sigma": 0.1,
+        "description": "Tight priors for 36 control variables to prevent overfitting"
+      },
+      
+      "media_channels": {
+        "distribution": "halfnormal",
+        "default_sigma": 0.5,
+        "description": "Media coefficients must be positive (HalfNormal)",
+        
+        "by_media_type": {
+          "TV": 1.0,
+          "DIGITAL": 0.5,
+          "IN STORE": 0.4,
+          "OOH": 0.6,
+          "OTHERADVERTISING_NEWSPAPER_RADIO": 0.3
+        },
+        
+        "channel_specific": {
+          "CDC+DIGITAL": {
+            "sigma": 0.8,
+            "description": "CDC digital - moderate effect"
+          },
+          "CDC+TV": {
+            "sigma": 1.5,
+            "description": "CDC TV - hero channel, strong effects expected"
+          },
+          "EQUITY+DIGITAL": {
+            "sigma": 0.6,
+            "description": "EQUITY digital - moderate effect"
+          },
+          "EQUITY+IN STORE": {
+            "sigma": 0.5,
+            "description": "EQUITY in-store - moderate effect"
+          },
+          "EQUITY+OOH": {
+            "sigma": 0.7,
+            "description": "EQUITY OOH - moderate-strong effect"
+          },
+          "EQUITY+OTHERADVERTISING_NEWSPAPER_RADIO": {
+            "sigma": 0.4,
+            "description": "EQUITY other advertising - weaker effect"
+          },
+          "EQUITY+TV": {
+            "sigma": 1.2,
+            "description": "EQUITY TV - strong brand channel"
+          },
+          "PANJAVED+DIGITAL": {
+            "sigma": 0.5,
+            "description": "PANJAVED digital - moderate effect"
+          },
+          "PANJAVED+IN STORE": {
+            "sigma": 0.4,
+            "description": "PANJAVED in-store - moderate effect"
+          },
+          "PANJAVED+OOH": {
+            "sigma": 0.6,
+            "description": "PANJAVED OOH - moderate effect"
+          },
+          "PANJAVED+TV": {
+            "sigma": 1.0,
+            "description": "PANJAVED TV - strong effect"
+          },
+          "SALT+DIGITAL": {
+            "sigma": 0.5,
+            "description": "SALT digital - moderate effect"
+          },
+          "SALT+IN STORE": {
+            "sigma": 0.4,
+            "description": "SALT in-store - moderate effect"
+          },
+          "SALT+OTHERADVERTISING_NEWSPAPER_RADIO": {
+            "sigma": 0.3,
+            "description": "SALT other advertising - weaker effect"
+          },
+          "SALT+TV": {
+            "sigma": 0.9,
+            "description": "SALT TV - strong effect"
+          },
+          "TOTAL+DIGITAL": {
+            "sigma": 0.6,
+            "description": "TOTAL digital - moderate effect"
+          },
+          "TOTAL+IN STORE": {
+            "sigma": 0.5,
+            "description": "TOTAL in-store - moderate effect"
+          },
+          "TOTAL+OTHERADVERTISING_NEWSPAPER_RADIO": {
+            "sigma": 0.4,
+            "description": "TOTAL other advertising - moderate-weak effect"
+          },
+          "TOTAL+TV": {
+            "sigma": 1.1,
+            "description": "TOTAL TV - strong effect"
+          }
+        }
+      }
     }
   },
   
@@ -128,9 +245,9 @@
   "roi_analysis": {
     "description": "ROAS calculation settings for specified time period",
     "analysis_period": {
-      "start_date": "2019-07-01",
-      "end_date": "2019-09-30",
-      "period_name": "Q2 2019"
+      "start_date": "2020-10-01",
+      "end_date": "2020-12-30",
+      "period_name": "Q3 2020"
     },
     "target_channels": "all",
     "breakeven_threshold": 1.0
@@ -155,7 +272,7 @@
       "trendline_plot": "actual_vs_predicted_trendline.png",
       "roi_plot": "roas_visualization.png",
       "decomp_media_vs_nonmedia": "revenue_decomp_media_vs_nonmedia.png",
-      "decomp_full": "revenue_decomp_full.png",
+      "decomp_waterfall": "revenue_decomp_waterfall.png",
       "contribution_pie": "revenue_contribution_pie.png",
       "contribution_bar": "revenue_contribution_bar.png",
       "trace_base": "trace_plots_base.png",
