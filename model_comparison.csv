@@ -1,0 +1,5 @@
+Metric,Linear Regression,Bayesian MMM,Winner
+R² Score,0.9638,-0.0119,Linear Regression
+MAE,"$362,403.25","$2,463,359.96",Linear Regression
+RMSE,"$516,530.76","$2,729,993.13",Linear Regression
+MAPE (%),1.56%,10.75%,Linear Regression

@@ -245,9 +245,9 @@
   "roi_analysis": {
     "description": "ROAS calculation settings for specified time period",
     "analysis_period": {
-      "start_date": "2020-10-01",
-      "end_date": "2020-12-30",
-      "period_name": "Q3 2020"
+      "start_date": "2020-01-01",
+      "end_date": "2020-03-30",
+      "period_name": "Q4 2019"
     },
     "target_channels": "all",
     "breakeven_threshold": 1.0

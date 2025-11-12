@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+from sklearn.linear_model import LinearRegression
 import pymc as pm
 import arviz as az
 import json
@@ -230,8 +231,56 @@ if __name__ == '__main__':
     print(f"  Control variables: {n_control}")
     
     # ============================================================================
-    # 7. BUILD BAYESIAN MMM MODEL
+    # 7. LINEAR REGRESSION BASELINE MODEL
     # ============================================================================
+    
+    print("\n" + "="*80)
+    print("BASELINE: LINEAR REGRESSION MODEL")
+    print("="*80)
+    
+    # Combine all features for linear regression
+    X_all = np.concatenate([X_media, X_control], axis=1)
+    
+    # Fit OLS linear regression
+    lr_model = LinearRegression()
+    lr_model.fit(X_all, y)
+    
+    # Get predictions
+    y_pred_lr = lr_model.predict(X_all)
+    
+    # Calculate metrics
+    lr_r2 = r2_score(y, y_pred_lr)
+    lr_mae = mean_absolute_error(y, y_pred_lr)
+    lr_rmse = np.sqrt(mean_squared_error(y, y_pred_lr))
+    lr_mape = np.mean(np.abs((y - y_pred_lr) / y)) * 100
+    
+    print(f"\nLinear Regression Performance:")
+    print(f"  R² Score: {lr_r2:.4f}")
+    print(f"  MAE: {lr_mae:,.2f}")
+    print(f"  RMSE: {lr_rmse:,.2f}")
+    print(f"  MAPE: {lr_mape:.2f}%")
+    
+    # Extract coefficients
+    lr_intercept = lr_model.intercept_
+    lr_coef_media = lr_model.coef_[:n_media]
+    lr_coef_control = lr_model.coef_[n_media:]
+    
+    print(f"\nLinear Regression Coefficients:")
+    print(f"  Intercept: {lr_intercept:,.2f}")
+    print(f"  Media coefficients range: [{lr_coef_media.min():.2f}, {lr_coef_media.max():.2f}]")
+    print(f"  Control coefficients range: [{lr_coef_control.min():.2f}, {lr_coef_control.max():.2f}]")
+    print(f"  Negative media coefficients: {(lr_coef_media < 0).sum()} out of {n_media}")
+    print(f"  Negative control coefficients: {(lr_coef_control < 0).sum()} out of {n_control}")
+    
+    print("\n✅ Linear regression baseline complete")
+    
+    # ============================================================================
+    # 8. BUILD BAYESIAN MMM MODEL
+    # ============================================================================
+    
+    print("\n" + "="*80)
+    print("BAYESIAN MMM MODEL")
+    print("="*80)
     
     print("\nBuilding Bayesian MMM model...")
     
@@ -903,7 +952,147 @@ if __name__ == '__main__':
     print(f"✅ Media contributions saved to: {output_config['output_files']['media_contributions']}")
     
     # ============================================================================
-    # 13. FINAL SUMMARY
+    # 13. MODEL COMPARISON: LINEAR REGRESSION vs BAYESIAN MMM
+    # ============================================================================
+    
+    print("\n" + "="*80)
+    print("MODEL COMPARISON: LINEAR REGRESSION vs BAYESIAN MMM")
+    print("="*80)
+    
+    # Create comparison table
+    comparison_data = {
+        'Metric': ['R² Score', 'MAE', 'RMSE', 'MAPE (%)'],
+        'Linear Regression': [
+            f"{lr_r2:.4f}",
+            f"${lr_mae:,.2f}",
+            f"${lr_rmse:,.2f}",
+            f"{lr_mape:.2f}%"
+        ],
+        'Bayesian MMM': [
+            f"{r2:.4f}",
+            f"${mae:,.2f}",
+            f"${rmse:,.2f}",
+            f"{mape:.2f}%"
+        ],
+        'Winner': [
+            'Bayesian MMM' if r2 > lr_r2 else 'Linear Regression',
+            'Bayesian MMM' if mae < lr_mae else 'Linear Regression',
+            'Bayesian MMM' if rmse < lr_rmse else 'Linear Regression',
+            'Bayesian MMM' if mape < lr_mape else 'Linear Regression'
+        ]
+    }
+    
+    comparison_df = pd.DataFrame(comparison_data)
+    print("\n" + "-"*80)
+    print("PERFORMANCE COMPARISON")
+    print("-"*80)
+    print(comparison_df.to_string(index=False))
+    
+    # Calculate improvement
+    r2_improvement = ((r2 - lr_r2) / abs(lr_r2) * 100) if lr_r2 != 0 else 0
+    mae_improvement = ((lr_mae - mae) / lr_mae * 100) if lr_mae != 0 else 0
+    rmse_improvement = ((lr_rmse - rmse) / lr_rmse * 100) if lr_rmse != 0 else 0
+    mape_improvement = ((lr_mape - mape) / lr_mape * 100) if lr_mape != 0 else 0
+    
+    print("\n" + "-"*80)
+    print("IMPROVEMENT SUMMARY")
+    print("-"*80)
+    print(f"R² Improvement:    {r2_improvement:+.2f}%")
+    print(f"MAE Improvement:   {mae_improvement:+.2f}%")
+    print(f"RMSE Improvement:  {rmse_improvement:+.2f}%")
+    print(f"MAPE Improvement:  {mape_improvement:+.2f}%")
+    
+    # Key differences
+    print("\n" + "-"*80)
+    print("KEY DIFFERENCES")
+    print("-"*80)
+    print(f"Linear Regression:")
+    print(f"  ✓ Fast training (instant)")
+    print(f"  ✓ Simple interpretation")
+    print(f"  ✗ No uncertainty quantification")
+    print(f"  ✗ Can produce negative media coefficients: {(lr_coef_media < 0).sum()}/{n_media}")
+    print(f"  ✗ No prior knowledge incorporation")
+    print(f"  ✗ Overfitting risk with many features")
+    
+    print(f"\nBayesian MMM:")
+    print(f"  ✓ Uncertainty quantification (credible intervals)")
+    print(f"  ✓ Enforces positive media coefficients (HalfNormal prior)")
+    print(f"  ✓ Incorporates domain knowledge via priors")
+    print(f"  ✓ Better regularization")
+    print(f"  ✗ Slower training (~{mcmc_config['draws']} draws)")
+    print(f"  ✗ More complex interpretation")
+    
+    # Save comparison
+    comparison_df.to_csv('model_comparison.csv', index=False)
+    print(f"\n✅ Model comparison saved to: model_comparison.csv")
+    
+    # Create comparison visualization
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    # 1. R² Comparison
+    ax1 = axes[0, 0]
+    models = ['Linear\nRegression', 'Bayesian\nMMM']
+    r2_scores = [lr_r2, r2]
+    colors_r2 = ['#3498db', '#2ecc71']
+    bars1 = ax1.bar(models, r2_scores, color=colors_r2, alpha=0.8, edgecolor='black', linewidth=1.5)
+    ax1.set_ylabel('R² Score', fontsize=12, fontweight='bold')
+    ax1.set_title('R² Score Comparison', fontsize=14, fontweight='bold')
+    ax1.set_ylim([min(r2_scores) - 0.1, max(r2_scores) + 0.1])
+    ax1.grid(True, alpha=0.3, axis='y')
+    for bar, score in zip(bars1, r2_scores):
+        height = bar.get_height()
+        ax1.text(bar.get_x() + bar.get_width()/2., height,
+                f'{score:.4f}', ha='center', va='bottom', fontweight='bold', fontsize=11)
+    
+    # 2. MAE Comparison
+    ax2 = axes[0, 1]
+    mae_scores = [lr_mae, mae]
+    colors_mae = ['#e74c3c' if lr_mae > mae else '#3498db', '#2ecc71' if mae < lr_mae else '#e74c3c']
+    bars2 = ax2.bar(models, mae_scores, color=colors_mae, alpha=0.8, edgecolor='black', linewidth=1.5)
+    ax2.set_ylabel('MAE ($)', fontsize=12, fontweight='bold')
+    ax2.set_title('Mean Absolute Error Comparison (Lower is Better)', fontsize=14, fontweight='bold')
+    ax2.grid(True, alpha=0.3, axis='y')
+    ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x/1e6:.1f}M' if abs(x) >= 1e6 else f'${x/1e3:.0f}K'))
+    for bar, score in zip(bars2, mae_scores):
+        height = bar.get_height()
+        ax2.text(bar.get_x() + bar.get_width()/2., height,
+                f'${score:,.0f}', ha='center', va='bottom', fontweight='bold', fontsize=10)
+    
+    # 3. RMSE Comparison
+    ax3 = axes[1, 0]
+    rmse_scores = [lr_rmse, rmse]
+    colors_rmse = ['#e74c3c' if lr_rmse > rmse else '#3498db', '#2ecc71' if rmse < lr_rmse else '#e74c3c']
+    bars3 = ax3.bar(models, rmse_scores, color=colors_rmse, alpha=0.8, edgecolor='black', linewidth=1.5)
+    ax3.set_ylabel('RMSE ($)', fontsize=12, fontweight='bold')
+    ax3.set_title('Root Mean Squared Error Comparison (Lower is Better)', fontsize=14, fontweight='bold')
+    ax3.grid(True, alpha=0.3, axis='y')
+    ax3.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'${x/1e6:.1f}M' if abs(x) >= 1e6 else f'${x/1e3:.0f}K'))
+    for bar, score in zip(bars3, rmse_scores):
+        height = bar.get_height()
+        ax3.text(bar.get_x() + bar.get_width()/2., height,
+                f'${score:,.0f}', ha='center', va='bottom', fontweight='bold', fontsize=10)
+    
+    # 4. MAPE Comparison
+    ax4 = axes[1, 1]
+    mape_scores = [lr_mape, mape]
+    colors_mape = ['#e74c3c' if lr_mape > mape else '#3498db', '#2ecc71' if mape < lr_mape else '#e74c3c']
+    bars4 = ax4.bar(models, mape_scores, color=colors_mape, alpha=0.8, edgecolor='black', linewidth=1.5)
+    ax4.set_ylabel('MAPE (%)', fontsize=12, fontweight='bold')
+    ax4.set_title('Mean Absolute Percentage Error Comparison (Lower is Better)', fontsize=14, fontweight='bold')
+    ax4.grid(True, alpha=0.3, axis='y')
+    for bar, score in zip(bars4, mape_scores):
+        height = bar.get_height()
+        ax4.text(bar.get_x() + bar.get_width()/2., height,
+                f'{score:.2f}%', ha='center', va='bottom', fontweight='bold', fontsize=11)
+    
+    plt.tight_layout()
+    plt.savefig('model_comparison_metrics.png', dpi=output_config['plot_dpi'], bbox_inches='tight')
+    plt.close()
+    
+    print(f"✅ Model comparison visualization saved to: model_comparison_metrics.png")
+    
+    # ============================================================================
+    # 14. FINAL SUMMARY
     # ============================================================================
     
     print("\n" + "="*80)
@@ -911,13 +1100,17 @@ if __name__ == '__main__':
     print("="*80)
     
     print("\n📊 VALIDATION RESULTS:")
-    print(f"   1. R² Score: {r2:.4f}")
+    print(f"   1. Linear Regression R²: {lr_r2:.4f}")
+    print(f"   2. Bayesian MMM R²: {r2:.4f}")
     print(f"   2. Trendline plots: Generated ✅")
     print(f"   3. ROAS Analysis ({period_name}): Complete ✅")
     print(f"   4. Revenue Decomposition (Media vs Non-Media): Complete ✅")
     print(f"   5. Media Channel Breakdown: Complete ✅")
     
     print("\n📁 OUTPUT FILES:")
+    print(f"\n  Model Comparison: ⭐")
+    print(f"   - model_comparison.csv (Metrics comparison table)")
+    print(f"   - model_comparison_metrics.png (Visual comparison)")
     print(f"\n  Model Diagnostics:")
     print(f"   - {output_config['output_files']['model_summary']}")
     print(f"   - {output_config['output_files']['trace_base']}")
@@ -929,7 +1122,7 @@ if __name__ == '__main__':
     print(f"   - {output_config['output_files']['roi_analysis']}")
     print(f"   - {output_config['output_files']['roi_plot']}")
     print(f"\n  Revenue Decomposition:")
-    print(f"   - {output_config['output_files']['decomp_waterfall']} ⭐ (Waterfall: Full Revenue Build-Up)")
+    print(f"   - {output_config['output_files']['decomp_waterfall']} (Waterfall: Full Revenue Build-Up)")
     print(f"   - {output_config['output_files']['decomp_media_vs_nonmedia']} (Pie: Media vs Non-Media)")
     print(f"   - {output_config['output_files']['contribution_pie']} (Pie: Media Channel Breakdown)")
     print(f"   - {output_config['output_files']['contribution_bar']} (Bar: Media Channel Breakdown)")
